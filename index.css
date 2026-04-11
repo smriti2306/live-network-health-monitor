@@ -1,0 +1,109 @@
+import { useStore } from '../store/useStore';
+
+function SkeletonCard() {
+  return (
+    <div className="metric-card">
+      <div className="metric-header">
+        <div className="skeleton skeleton-text" style={{ width: '40%' }}></div>
+      </div>
+      <div className="skeleton skeleton-value"></div>
+      <div className="skeleton skeleton-text" style={{ width: '55%' }}></div>
+    </div>
+  );
+}
+
+export default function MetricsGrid() {
+  const metrics = useStore((s) => s.metrics);
+  const isLoading = useStore((s) => s.isLoading);
+
+  if (isLoading || !metrics) {
+    return (
+      <div className="metrics-grid">
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
+    );
+  }
+
+  const statusLabel = {
+    healthy: 'Healthy',
+    moderate: 'Moderate',
+    congested: 'Congested',
+    unknown: 'Unknown',
+  };
+
+  const statusEmoji = {
+    healthy: '🟢',
+    moderate: '🟡',
+    congested: '🔴',
+    unknown: '⚪',
+  };
+
+  return (
+    <div className="metrics-grid fade-in">
+      {/* TPS Card */}
+      <div className="metric-card tps-card" id="metric-tps">
+        <div className="metric-header">
+          <span className="metric-label">Transactions / sec</span>
+          <span className="metric-icon">⚡</span>
+        </div>
+        <div className="metric-value count-up">
+          {metrics.tps?.toFixed(2) || '0.00'}
+        </div>
+        <div className="metric-sub">
+          {metrics.txCount || 0} txs in last ledger
+        </div>
+      </div>
+
+      {/* Base Fee Card */}
+      <div className="metric-card fee-card" id="metric-fee">
+        <div className="metric-header">
+          <span className="metric-label">Base Fee</span>
+          <span className="metric-icon">💎</span>
+        </div>
+        <div className="metric-value count-up">
+          {metrics.baseFeeStroops || 100}
+          <span style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '0.25rem' }}>
+            stroops
+          </span>
+        </div>
+        <div className="metric-sub">
+          {metrics.baseFee ? `${metrics.baseFee.toFixed(7)} XLM` : '0.0000100 XLM'}
+        </div>
+      </div>
+
+      {/* Ledger Close Time Card */}
+      <div className="metric-card ledger-card" id="metric-ledger">
+        <div className="metric-header">
+          <span className="metric-label">Ledger Close Time</span>
+          <span className="metric-icon">⏱️</span>
+        </div>
+        <div className="metric-value count-up">
+          {metrics.closeTime ? metrics.closeTime.toFixed(1) : '—'}
+          <span style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '0.25rem' }}>
+            sec
+          </span>
+        </div>
+        <div className="metric-sub">
+          Ledger #{metrics.ledgerSequence?.toLocaleString() || '—'}
+        </div>
+      </div>
+
+      {/* Network Status Card */}
+      <div className="metric-card status-card" id="metric-status">
+        <div className="metric-header">
+          <span className="metric-label">Network Status</span>
+          <span className="metric-icon">{statusEmoji[metrics.networkStatus] || '⚪'}</span>
+        </div>
+        <div className={`metric-value count-up ${metrics.networkStatus}`}>
+          {statusLabel[metrics.networkStatus] || 'Unknown'}
+        </div>
+        <div className="metric-sub">
+          {metrics.opCount || 0} operations in last ledger
+        </div>
+      </div>
+    </div>
+  );
+}

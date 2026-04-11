@@ -1,0 +1,161 @@
+import { create } from 'zustand';
+
+const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001/ws';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const MAX_HISTORY = 100;
+const MAX_LOGS = 80;
+const MAX_ALERTS = 30;
+const RECONNECT_DELAY = 3000;
+
+export const useStore = create((set, get) => ({
+  // Connection state
+  connectionStatus: 'disconnected', // 'connected' | 'connecting' | 'disconnected'
+  ws: null,
+  reconnectTimer: null,
+
+  // Data
+  metrics: null,
+  history: [],
+  logs: [],
+  alerts: [],
+  network: 'Mainnet',
+
+  // UI
+  isLoading: true,
+
+  // Actions
+  connect: () => {
+    const state = get();
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) return;
+
+    set({ connectionStatus: 'connecting' });
+
+    const ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      console.log('[WS] Connected');
+      set({ connectionStatus: 'connected', ws });
+      // Clear any reconnect timer
+      const timer = get().reconnectTimer;
+      if (timer) {
+        clearTimeout(timer);
+        set({ reconnectTimer: null });
+      }
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const { type, data } = JSON.parse(event.data);
+
+        switch (type) {
+          case 'snapshot':
+            set({
+              metrics: data.metrics,
+              history: data.history || [],
+              logs: data.logs || [],
+              alerts: data.alerts || [],
+              network: data.network || 'Mainnet',
+              isLoading: false,
+            });
+            break;
+
+          case 'metrics':
+            set((s) => {
+              const newHistory = [...s.history, {
+                timestamp: data.timestamp,
+                tps: data.tps,
+                closeTime: data.closeTime,
+                baseFee: data.baseFee,
+                baseFeeStroops: data.baseFeeStroops,
+                txCount: data.txCount,
+                opCount: data.opCount,
+                ledgerSequence: data.ledgerSequence,
+                networkStatus: data.networkStatus,
+              }].slice(-MAX_HISTORY);
+
+              return {
+                metrics: data,
+                history: newHistory,
+                isLoading: false,
+              };
+            });
+            break;
+
+          case 'log':
+            set((s) => ({
+              logs: [...s.logs, data].slice(-MAX_LOGS),
+            }));
+            break;
+
+          case 'alert':
+            set((s) => ({
+              alerts: [...s.alerts, data].slice(-MAX_ALERTS),
+            }));
+            break;
+        }
+      } catch (err) {
+        console.error('[WS] Parse error:', err);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('[WS] Disconnected');
+      set({ connectionStatus: 'disconnected', ws: null });
+
+      // Auto-reconnect
+      const timer = setTimeout(() => {
+        console.log('[WS] Reconnecting...');
+        get().connect();
+      }, RECONNECT_DELAY);
+
+      set({ reconnectTimer: timer });
+    };
+
+    ws.onerror = (err) => {
+      console.error('[WS] Error:', err);
+    };
+
+    set({ ws });
+  },
+
+  disconnect: () => {
+    const { ws, reconnectTimer } = get();
+    if (reconnectTimer) clearTimeout(reconnectTimer);
+    if (ws) ws.close();
+    set({ ws: null, connectionStatus: 'disconnected', reconnectTimer: null });
+  },
+
+  // REST fallback
+  fetchMetrics: async () => {
+    try {
+      const res = await fetch(`${API_URL}/metrics`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      set({
+        metrics: data.metrics,
+        history: data.history || [],
+        logs: data.logs || [],
+        alerts: data.alerts || [],
+        network: data.network || 'Mainnet',
+        isLoading: false,
+      });
+    } catch (err) {
+      console.error('[API] Fetch failed:', err);
+    }
+  },
+
+  exportCSV: async () => {
+    try {
+      const res = await fetch(`${API_URL}/export`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `stellar-metrics-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('[API] Export failed:', err);
+    }
+  },
+}));
