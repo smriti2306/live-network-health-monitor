@@ -5,6 +5,8 @@ A real-time dashboard for monitoring the Stellar blockchain network health, incl
 ![Stellar Monitor](https://img.shields.io/badge/Stellar-Network_Monitor-6366f1?style=for-the-badge)
 ![React](https://img.shields.io/badge/React-19-61dafb?style=for-the-badge)
 ![Node.js](https://img.shields.io/badge/Node.js-Express-339933?style=for-the-badge)
+![Soroban](https://img.shields.io/badge/Soroban-Smart_Contract-ff6b35?style=for-the-badge)
+![Rust](https://img.shields.io/badge/Rust-Soroban_SDK-dea584?style=for-the-badge)
 
 ## ✨ Features
 
@@ -18,6 +20,9 @@ A real-time dashboard for monitoring the Stellar blockchain network health, incl
 - **WebSocket reconnection** — Auto-reconnect with fallback polling
 - **Responsive design** — Mobile-first with stacked → 2-column → full grid
 - **Dark mode UI** — Web3-inspired glassmorphism design
+- **On-chain snapshots** — Health metrics persisted to Stellar via Soroban smart contract
+- **On-chain alerts** — Automatic anomaly detection with tamper-proof alert storage
+- **Role-based access** — Admin/reporter authorization for on-chain submissions
 
 ## 🛠️ Tech Stack
 
@@ -30,7 +35,8 @@ A real-time dashboard for monitoring the Stellar blockchain network health, incl
 | Backend | Node.js + Express |
 | WebSocket | `ws` library |
 | Blockchain | Stellar SDK (`@stellar/stellar-sdk`) |
-| API | Stellar Horizon API |
+| Smart Contract | Soroban (Rust) — on-chain health storage |
+| API | Stellar Horizon API + Soroban RPC |
 
 ## 📦 Project Structure
 
@@ -39,7 +45,8 @@ A real-time dashboard for monitoring the Stellar blockchain network health, incl
 │   ├── server.js              # Express + WebSocket server
 │   ├── services/
 │   │   ├── stellarService.js  # Horizon API integration
-│   │   └── metricsEngine.js   # TPS computation, health scoring, alerts
+│   │   ├── metricsEngine.js   # TPS computation, health scoring, alerts
+│   │   └── contractService.js # Soroban contract interaction layer
 │   ├── .env
 │   └── package.json
 ├── frontend/
@@ -60,6 +67,12 @@ A real-time dashboard for monitoring the Stellar blockchain network health, incl
 │   │       └── ConnectionBar.jsx
 │   ├── .env
 │   └── package.json
+├── smart-contract/
+│   ├── Cargo.toml             # Rust/Soroban dependencies
+│   ├── src/
+│   │   └── lib.rs             # Soroban smart contract (health monitor)
+│   └── README.md              # Contract documentation
+├── contractService.js         # JS bridge to on-chain contract
 └── README.md
 ```
 
@@ -101,6 +114,7 @@ Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
 | `/api/health` | GET | System health status |
 | `/api/history?hours=1` | GET | Historical data points |
 | `/api/export` | GET | Download metrics as CSV |
+| `/api/contract` | GET | On-chain contract state & info |
 | `/ws` | WebSocket | Real-time metric updates |
 
 ## ⚙️ Environment Variables
@@ -110,6 +124,12 @@ Navigate to [http://localhost:5173](http://localhost:5173) in your browser.
 HORIZON_URL=https://horizon.stellar.org
 PORT=3001
 CORS_ORIGIN=http://localhost:5173
+
+# Soroban Smart Contract (optional — on-chain features)
+CONTRACT_ID=<your-deployed-contract-id>
+SOROBAN_RPC_URL=https://soroban-testnet.stellar.org
+NETWORK_PASSPHRASE=Test SDF Network ; September 2015
+REPORTER_SECRET_KEY=<reporter-stellar-secret-key>
 ```
 
 ### Frontend (`.env`)
@@ -138,6 +158,34 @@ The UI uses a custom CSS design system with:
 - Smooth gradient fills on charts
 - Micro-animations (pulse, shimmer, fade-in)
 - Responsive breakpoints: 640px / 1024px
+
+## 🔗 Soroban Smart Contract
+
+The `smart-contract/` directory contains a Rust-based Soroban contract that stores health snapshots on-chain.
+
+### Key Capabilities
+- **Health Snapshots** — TPS, fees, close times stored per ledger sequence
+- **Auto-Alerting** — On-chain alerts generated for slow ledgers (>10s) and fee spikes (>500 stroops)
+- **Health Scoring** — Same algorithm as the off-chain engine (Healthy/Moderate/Congested)
+- **Access Control** — Admin + authorized reporter pattern with `require_auth()`
+- **Configurable** — Health thresholds adjustable by admin
+
+### Build & Test
+```bash
+cd smart-contract
+cargo build --target wasm32-unknown-unknown --release
+cargo test
+```
+
+### Deploy to Testnet
+```bash
+soroban contract deploy \
+  --wasm target/wasm32-unknown-unknown/release/network_health_monitor.wasm \
+  --source deployer \
+  --network testnet
+```
+
+See [`smart-contract/README.md`](smart-contract/README.md) for full documentation.
 
 ## 📄 License
 
